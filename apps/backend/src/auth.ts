@@ -1,13 +1,14 @@
 import { APIError, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
+import { buildAfterCreateHook, buildBeforeCreateHook } from './auth-hooks';
 import { db } from './db/db';
 import dbConfig, { Dialect } from './db/dbConfig';
 import { env, isCloud } from './env';
 import * as orgQueries from './queries/organization.queries';
 import { emailService } from './services/email';
 import { buildForgotPasswordEmail } from './utils/email-builders';
-import { buildGithubAllowlist, isEmailDomainAllowed } from './utils/utils';
+import { buildGithubAllowlist } from './utils/utils';
 
 type GoogleConfig = Awaited<ReturnType<typeof orgQueries.getGoogleConfig>>;
 
@@ -52,6 +53,24 @@ function createAuthInstance(googleConfig: GoogleConfig) {
 		};
 	}
 
+	if (env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET) {
+		// `tenantId` is forwarded into the Microsoft authorize URL, so a UUID restricts the OAuth flow
+		// to that single tenant at the IdP layer. `organizations` (default) accepts any work/school
+		// account but blocks personal Microsoft accounts. See apps/backend/docs/auth-microsoft.md.
+		socialProviders.microsoft = {
+			clientId: env.MICROSOFT_CLIENT_ID,
+			clientSecret: env.MICROSOFT_CLIENT_SECRET,
+			tenantId: env.MICROSOFT_TENANT_ID ?? 'organizations',
+			prompt: 'select_account',
+		};
+	}
+
+	const beforeCreate = buildBeforeCreateHook({
+		googleAuthDomains: googleConfig.authDomains,
+		microsoftAuthDomains: env.MICROSOFT_AUTH_DOMAINS,
+	});
+	const afterCreate = buildAfterCreateHook({ isCloud });
+
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,
 		database: drizzleAdapter(db, {
@@ -69,30 +88,20 @@ function createAuthInstance(googleConfig: GoogleConfig) {
 			},
 		},
 		socialProviders,
+		// Restrict cross-provider account linking to providers that always return a verified email.
+		// Prevents an attacker controlling provider B from taking over an existing account on provider A
+		// just by claiming the same email. Better-auth defaults `allowDifferentEmails` to false.
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ['google', 'github', 'microsoft'],
+			},
+		},
 		databaseHooks: {
 			user: {
 				create: {
-					before: async (user, ctx) => {
-						const isGoogle = ctx?.params?.id === 'google';
-						if (isGoogle && !isEmailDomainAllowed(user.email, googleConfig.authDomains)) {
-							throw new APIError('FORBIDDEN', {
-								message: 'This email domain is not authorized to access this application.',
-							});
-						}
-						return true;
-					},
-					async after(user, ctx) {
-						const isSocial = ctx?.params?.id === 'google' || ctx?.params?.id === 'github';
-
-						if (isCloud) {
-							await orgQueries.initializePersonalOrganization(user.id);
-						} else {
-							await orgQueries.initializeDefaultOrganizationForFirstUser(user.id);
-							if (isSocial) {
-								await orgQueries.addUserToDefaultProjectIfExists(user.id);
-							}
-						}
-					},
+					before: beforeCreate,
+					after: afterCreate,
 				},
 			},
 		},

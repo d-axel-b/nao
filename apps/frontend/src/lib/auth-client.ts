@@ -34,4 +34,12 @@ const handleGithubSignIn = async () => {
 	});
 };
 
-export { handleGoogleSignIn, handleGithubSignIn };
+const handleMicrosoftSignIn = async () => {
+	await authClient.signIn.social({
+		provider: 'microsoft',
+		callbackURL: '/',
+		errorCallbackURL: '/login',
+	});
+};
+
+export { handleGoogleSignIn, handleGithubSignIn, handleMicrosoftSignIn };

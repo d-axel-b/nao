@@ -47,6 +47,11 @@ export const authConfigRoutes = {
 			return !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
 		}),
 	},
+	microsoft: {
+		isSetup: publicProcedure.query(() => {
+			return !!(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET);
+		}),
+	},
 	smtp: {
 		isSetup: publicProcedure.query(() => emailService.isEnabled()),
 	},
