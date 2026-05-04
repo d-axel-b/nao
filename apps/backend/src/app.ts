@@ -14,6 +14,7 @@ import { AUTOMATION_JOB_NAME, automationHandler } from './handlers/automation.ha
 import { LOG_CLEANUP_JOB_NAME, logCleanupHandler, runLogCleanup } from './handlers/log-cleanup.handler';
 import { MCP_QUERY_DATA_CLEANUP_JOB_NAME, mcpQueryDataCleanupHandler } from './handlers/mcp-query-data-cleanup.handler';
 import { mcpServerRoutes } from './mcp/routes';
+import { jwtAuthPreHandler } from './middleware/jwt-auth';
 import { ensureOrganizationSetup } from './queries/organization.queries';
 import { agentRoutes } from './routes/agent';
 import { authRoutes } from './routes/auth';
@@ -122,6 +123,10 @@ app.register(formbody);
 
 // Register multipart plugin for file uploads (deploy endpoint)
 app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } });
+
+if (env.JWT_AUTH_ENABLED) {
+	app.addHook('preHandler', jwtAuthPreHandler);
+}
 
 // Register tRPC plugin
 app.register(fastifyTRPCPlugin, {

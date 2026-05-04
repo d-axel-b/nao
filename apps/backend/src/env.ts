@@ -83,6 +83,22 @@ const envSchema = z.object({
 		.enum(['true', 'false'])
 		.optional()
 		.transform((val) => val === 'true'),
+
+	JWT_AUTH_ENABLED: z
+		.enum(['true', 'false'])
+		.optional()
+		.transform((val) => val === 'true'),
+	JWT_JWKS_URL: z.string().optional(),
+	JWT_ISSUER: z.string().optional(),
+	JWT_CLAIM_EMAIL: z.string().optional(),
+	JWT_CLAIM_NAME: z.string().optional(),
+	JWT_AUTH_DOMAINS: z.string().optional(),
+	JWT_GROUP_CLAIM: z.string().optional(),
+	JWT_GROUP_PREFIX: z.string().optional(),
+	JWT_GROUP_SUFFIX: z.string().optional(),
+	JWT_GROUP_ROLE_ADMIN: z.string().optional(),
+	JWT_GROUP_ROLE_USER: z.string().optional(),
+	JWT_GROUP_ROLE_VIEWER: z.string().optional(),
 });
 
 const result = envSchema.safeParse(process.env);
@@ -97,6 +113,11 @@ if (!result.success) {
 
 if (result.data.NAO_DEFAULT_PROJECT_PATH && result.data.NAO_MODE === 'cloud') {
 	console.error('NAO_DEFAULT_PROJECT_PATH and NAO_MODE=cloud cannot be set at the same time.');
+	process.exit(1);
+}
+
+if (result.data.JWT_AUTH_ENABLED && !result.data.JWT_JWKS_URL) {
+	console.error('JWT_JWKS_URL is required when JWT_AUTH_ENABLED=true.');
 	process.exit(1);
 }
 
